@@ -339,7 +339,13 @@
   "use strict";
 
   // ── API base ──────────────────────────────────────────────
-  var API_BASE = "http://localhost:8000";
+  // Default to this page's own origin: correct whenever the widget is
+  // served by the same FastAPI app it talks to (e.g. the /widget mount in
+  // api/main.py). Only a standalone/iframe embed on another site needs to
+  // override this via window.CODERZ_CHAT_API or ?api=.
+  var API_BASE = location.origin && location.origin !== "null"
+    ? location.origin
+    : "http://localhost:8000";
   try {
     var qs = new URLSearchParams(location.search).get("api");
     if (window.CODERZ_CHAT_API) API_BASE = String(window.CODERZ_CHAT_API);
