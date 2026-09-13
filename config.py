@@ -75,6 +75,15 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Feedback storage (SQLite) — logs every /chat interaction + team
+    # thumbs up/down so the team can review answer quality.
+    # ------------------------------------------------------------------
+    feedback_db_path: str = Field(
+        default="data/feedback.db",
+        description="Path to the SQLite DB storing interaction logs + feedback.",
+    )
+
+    # ------------------------------------------------------------------
     # Embeddings — swap provider via EMBEDDING_PROVIDER.
     # NOT finalised: the model is chosen after the Phase 5 benchmark.
     # ------------------------------------------------------------------
@@ -140,6 +149,7 @@ if __name__ == "__main__":
     print(f"llm_max_tokens      : {settings.llm_max_tokens}")
     print(f"llm_request_timeout : {settings.llm_request_timeout}")
     print(f"cors_allow_origins  : {settings.cors_allow_origins}")
+    print(f"feedback_db_path    : {settings.feedback_db_path}")
     print(f"embedding_provider  : {settings.embedding_provider}")
     print(f"embedding_model     : {settings.embedding_model}")
     print(f"embedding_dim       : {settings.embedding_dim}")

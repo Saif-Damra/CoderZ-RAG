@@ -1,0 +1,17 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+
+# Secrets — passed at runtime via docker-compose's env_file, never baked in
+.env
+
+# Course source files (large, customer data) — Qdrant Cloud already has them
+data/pdfs/*
+!data/pdfs/.gitkeep
+!data/pdfs/*.meta.json
+
+# Generated at runtime — lives on the mounted ./data volume instead
+data/feedback.db
+data/ingest_report.json
+eval/runs/

@@ -195,6 +195,42 @@
   }
   .cz-src[dir="rtl"] { align-self: flex-end; text-align: right; }
 
+  .cz-feedback {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-block-start: -4px;
+  }
+  .cz-feedback[dir="rtl"] { align-self: flex-end; }
+  .cz-fb-btn {
+    border: 1px solid var(--cz-border);
+    background: transparent;
+    border-radius: 8px;
+    padding: 2px 7px;
+    font-size: 13px;
+    line-height: 1.6;
+    cursor: pointer;
+    color: var(--cz-muted);
+  }
+  .cz-fb-btn:hover { background: var(--cz-bot-bg); }
+  .cz-fb-btn.active { border-color: var(--cz-accent); color: var(--cz-accent); }
+  .cz-fb-btn:disabled { cursor: default; opacity: .6; }
+  .cz-fb-btn:focus-visible { outline: 2px solid var(--cz-accent); outline-offset: 1px; }
+  .cz-fb-comment {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 220px;
+    border: 1px solid var(--cz-border);
+    border-radius: 8px;
+    padding: 3px 8px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--cz-input-text);
+    background: var(--cz-bg);
+  }
+  .cz-fb-comment:focus-visible { outline: 2px solid var(--cz-accent); outline-offset: 0; }
+
   /* typing dots */
   .cz-typing { display: inline-flex; gap: 4px; align-items: center; }
   .cz-typing i {
@@ -322,7 +358,10 @@
       source: "Source",
       listSep: ", ",
       errRephrase: "Please rephrase your question.",
-      errGeneric: "Something went wrong. Please try again."
+      errGeneric: "Something went wrong. Please try again.",
+      fbUp: "Helpful",
+      fbDown: "Not helpful",
+      fbCommentPlaceholder: "What went wrong? (optional)"
     },
     ar: {
       title: "CoderZ — مساعد الدورات",
@@ -331,7 +370,10 @@
       source: "المصدر",
       listSep: "، ",
       errRephrase: "من فضلك أعد صياغة سؤالك.",
-      errGeneric: "حدث خطأ ما. حاول مرة أخرى."
+      errGeneric: "حدث خطأ ما. حاول مرة أخرى.",
+      fbUp: "مفيدة",
+      fbDown: "غير مفيدة",
+      fbCommentPlaceholder: "ما الخطأ؟ (اختياري)"
     }
   };
 
@@ -406,6 +448,82 @@
     return el;
   }
 
+  // ── Feedback (thumbs up/down + optional comment) ───────────
+  function sendFeedback(interactionId, rating, comment) {
+    fetch(API_BASE + "/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        interaction_id: interactionId,
+        rating: rating,
+        comment: comment || undefined
+      })
+    }).catch(function () { /* best-effort; nothing to show the user */ });
+  }
+
+  function addFeedbackUI(afterEl, interactionId, lang) {
+    if (interactionId === null || interactionId === undefined) return;
+    var dir = lang === "ar" ? "rtl" : "ltr";
+    var c = COPY[lang === "ar" ? "ar" : "en"];
+
+    var wrap = document.createElement("div");
+    wrap.className = "cz-feedback";
+    wrap.dir = dir;
+
+    var up = document.createElement("button");
+    var down = document.createElement("button");
+    up.type = "button";
+    down.type = "button";
+    up.className = "cz-fb-btn";
+    down.className = "cz-fb-btn";
+    up.textContent = "👍"; // 👍
+    down.textContent = "👎"; // 👎
+    up.setAttribute("aria-label", c.fbUp);
+    down.setAttribute("aria-label", c.fbDown);
+
+    var sent = false;
+    function lock(button) {
+      sent = true;
+      up.disabled = true;
+      down.disabled = true;
+      button.classList.add("active");
+    }
+
+    up.addEventListener("click", function () {
+      if (sent) return;
+      lock(up);
+      sendFeedback(interactionId, "up", null);
+    });
+    down.addEventListener("click", function () {
+      if (sent) return;
+      lock(down);
+      var box = document.createElement("input");
+      box.type = "text";
+      box.className = "cz-fb-comment";
+      box.dir = dir;
+      box.maxLength = 500;
+      box.placeholder = c.fbCommentPlaceholder;
+      var done = false;
+      function submitComment() {
+        if (done) return;
+        done = true;
+        sendFeedback(interactionId, "down", box.value.trim() || null);
+        box.remove();
+      }
+      box.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); submitComment(); }
+      });
+      box.addEventListener("blur", submitComment);
+      wrap.appendChild(box);
+      box.focus();
+    });
+
+    wrap.appendChild(up);
+    wrap.appendChild(down);
+    afterEl.parentNode.insertBefore(wrap, afterEl.nextSibling);
+    scrollDown();
+  }
+
   // ── Networking ────────────────────────────────────────────
   function ask(question) {
     var ctrl = new AbortController();
@@ -449,10 +567,12 @@
       var fallbackLang = langOf(q);
 
       if (r.ok && r.data && typeof r.data.answer === "string") {
+        var botLang = r.data.language || fallbackLang;
         addMessage("bot", r.data.answer, {
           sources: r.data.used_context ? (r.data.sources || []) : [],
-          lang: r.data.language || fallbackLang
+          lang: botLang
         });
+        addFeedbackUI(log.lastChild, r.data.interaction_id, botLang);
       } else {
         var c = COPY[fallbackLang];
         var msg = r.status === 422 ? c.errRephrase : c.errGeneric;

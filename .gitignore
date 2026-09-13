@@ -18,6 +18,11 @@ data/pdfs/*
 # Generated ingest report
 data/ingest_report.json
 
+# Feedback DB (interaction logs + team ratings) — runtime data, not source
+data/feedback.db
+data/feedback.db-wal
+data/feedback.db-shm
+
 # Generated evaluation run results
 eval/runs/
 

@@ -101,14 +101,36 @@ python scripts/check_api.py              # in-process smoke test (no server)
 `POST /chat` — body: `question` (required), optional `language` (`"ar"`/`"en"`,
 auto-detected otherwise), optional `filters`
 (`course_id`, `category`, `language`, `min_price`, `max_price`). Returns
-`answer`, `sources`, `used_context`, `language`. Bad input → `422`; a missing
-key or unreachable dependency → `503`; a downstream failure → `502`, always with
-a short safe message (no internals). `GET /health` reports the active
-provider / model / collection. Interactive docs at `/docs`.
+`answer`, `sources`, `used_context`, `language`, `interaction_id` (id of the
+logged interaction — see Feedback below; `null` if logging failed, which never
+blocks the answer). Bad input → `422`; a missing key or unreachable dependency
+→ `503`; a downstream failure → `502`, always with a short safe message (no
+internals). `GET /health` reports the active provider / model / collection.
+Interactive docs at `/docs`.
 
 Browser origins allowed to call the API come from `CORS_ALLOW_ORIGINS` (comma
 separated; `*` for local dev — set real origins before deploying). Send request
 bodies as UTF-8 JSON.
+
+## Feedback logging (for team testing)
+
+Every `POST /chat` call is logged to a SQLite DB at `FEEDBACK_DB_PATH`
+(default `data/feedback.db`, git-ignored) — question, detected language,
+answer, sources, `used_context`, and response time. `POST /feedback` — body:
+`interaction_id` (from the `/chat` response), `rating` (`"up"`/`"down"`),
+optional `comment` — attaches a rating to that row. A logging or feedback
+failure never breaks the chat response itself.
+
+Review what's been collected:
+
+```bash
+python scripts/export_feedback.py                  # console table, newest first
+python scripts/export_feedback.py --only-feedback   # just rated rows
+python scripts/export_feedback.py --csv out.csv     # full untruncated dump
+```
+
+The chat widget (below) shows 👍/👎 under each answer and posts to
+`/feedback` automatically; 👎 reveals an optional one-line comment box.
 
 ## Chat widget (Phase 7)
 
@@ -139,6 +161,44 @@ query param, or the `API_BASE` default in the file. Then add the host site's
 origin to `CORS_ALLOW_ORIGINS`. Rebrand by editing the four `--cz-*` custom
 properties at the top of the `<style>` block.
 
+When the API is running (locally or via Docker, below), it also serves the
+widget itself at `/widget/widget.html` — nothing extra to host for internal
+team testing.
+
+## Deployment (Docker, for team testing on a VPS)
+
+One container runs the API and serves the widget — no separate web server
+needed. `data/` is mounted as a volume so `data/feedback.db` survives rebuilds.
+
+```bash
+git clone <your-repo-url> && cd rag-courses   # or: git pull, if already cloned
+cp .env.example .env                          # then fill in real secrets
+docker compose up -d --build
+```
+
+Qdrant Cloud already holds the ingested courses, so the VPS doesn't need
+`data/pdfs/`. Leave `CORS_ALLOW_ORIGINS=*` for internal testing (the widget is
+served same-origin from the same container anyway).
+
+Your team then uses:
+
+- Widget: `http://YOUR_VPS_IP:8000/widget/widget.html`
+- API docs: `http://YOUR_VPS_IP:8000/docs`
+
+Make sure port 8000 is open in the VPS firewall for your team's IPs — there's
+no authentication on the API, which is fine for internal testing but don't
+leave it open to the wider internet longer than needed. Putting a real domain
++ HTTPS in front (nginx, Caddy, etc.) is a reasonable next step once this
+moves past internal testing, but isn't required to get the team testing today.
+
+Useful commands on the VPS:
+
+```bash
+docker compose logs -f api                              # tail logs
+docker compose restart                                  # restart after an env change
+docker compose exec api python scripts/export_feedback.py --only-feedback
+```
+
 ## Repository layout
 
 ```
@@ -148,11 +208,15 @@ requirements.txt
 scripts/check_qdrant.py Qdrant connectivity check
 scripts/check_retrieval.py dense retrieval check
 data/pdfs/              course PDFs (git-ignored) + <stem>.meta.json sidecars (tracked)
+data/feedback.db        SQLite interaction log + team feedback (git-ignored, runtime)
 ingest/                 parse.py · chunk.py · embed_upsert.py · run_ingest.py
 query/                  retrieve.py · generate.py
-api/main.py             FastAPI /chat (Phase 6)
-web/widget.html         embeddable chat widget (Phase 7)
+api/main.py             FastAPI /chat, /feedback (Phase 6)
+api/storage.py          SQLite persistence for /chat and /feedback
+web/widget.html         embeddable chat widget incl. 👍/👎 feedback (Phase 7)
+scripts/export_feedback.py review logged Q&A + feedback
 eval/                   questions.json · eval.py (Phase 5)
+Dockerfile, docker-compose.yml   VPS deployment
 ```
 
 `scripts/` and the package `__init__.py` files are small additions to the layout

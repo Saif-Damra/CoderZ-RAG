@@ -17,12 +17,16 @@ Run:
 from __future__ import annotations
 
 import logging
+import time
+from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from api import storage
 from config import settings
 from query.generate import answer_question
 from query.retrieve import RetrievalFilters
@@ -119,6 +123,17 @@ class ChatResponse(BaseModel):
     sources: list[str]
     used_context: bool
     language: str
+    interaction_id: int | None = None
+
+
+class FeedbackRequest(BaseModel):
+    interaction_id: int
+    rating: Literal["up", "down"]
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class FeedbackResponse(BaseModel):
+    ok: bool
 
 
 # --------------------------------------------------------------------------- #
@@ -126,6 +141,14 @@ class ChatResponse(BaseModel):
 # --------------------------------------------------------------------------- #
 _UNAVAILABLE = "The assistant is temporarily unavailable. Please try again later."
 _FAILED = "The assistant could not process the request right now. Please try again."
+
+
+@app.on_event("startup")
+def _init_storage() -> None:
+    try:
+        storage.init_db()
+    except Exception:
+        logger.exception("feedback DB init failed — interaction logging will be skipped")
 
 
 @app.exception_handler(Exception)
@@ -167,6 +190,7 @@ def chat(req: ChatRequest) -> ChatResponse:
     the event loop.
     """
     rf = req.filters.to_retrieval_filters() if req.filters else None
+    started = time.monotonic()
     try:
         result = answer_question(req.question, filters=rf, language=req.language)
     except RuntimeError as exc:
@@ -177,12 +201,46 @@ def chat(req: ChatRequest) -> ChatResponse:
         logger.exception("chat pipeline failed")
         return JSONResponse(status_code=502, content={"detail": _FAILED})
 
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    interaction_id: int | None = None
+    try:
+        interaction_id = storage.log_interaction(
+            question=req.question,
+            detected_language=result.language,
+            answer=result.answer,
+            sources=result.sources,
+            used_context=result.used_context,
+            response_time_ms=elapsed_ms,
+        )
+    except Exception:
+        # Never let a logging failure turn a good answer into an error response.
+        logger.exception("failed to log interaction")
+
     return ChatResponse(
         answer=result.answer,
         sources=result.sources,
         used_context=result.used_context,
         language=result.language,
+        interaction_id=interaction_id,
     )
+
+
+@app.post("/feedback", response_model=FeedbackResponse)
+def feedback(req: FeedbackRequest) -> FeedbackResponse:
+    """Attach a thumbs up/down (+ optional comment) to a prior /chat reply."""
+    try:
+        ok = storage.record_feedback(req.interaction_id, req.rating, req.comment)
+    except Exception:
+        logger.exception("failed to record feedback")
+        return JSONResponse(status_code=502, content={"detail": _FAILED})
+    if not ok:
+        return JSONResponse(status_code=404, content={"detail": "interaction_id not found"})
+    return FeedbackResponse(ok=True)
+
+
+# Serve the chat widget at /widget (kept off "/" so it doesn't shadow the
+# JSON service banner above). Mounted last so it can't shadow API routes.
+app.mount("/widget", StaticFiles(directory="web", html=True), name="widget")
 
 
 if __name__ == "__main__":
