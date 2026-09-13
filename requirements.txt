@@ -1,0 +1,41 @@
+# Core orchestration
+llama-index-core
+llama-index-vector-stores-qdrant
+
+# LLM providers (swappable via LLM_PROVIDER in config)
+llama-index-llms-anthropic
+llama-index-llms-openai
+
+# Embeddings — OpenAI for now; final choice after the Phase 5 benchmark
+llama-index-embeddings-openai
+
+# Vector DB client
+qdrant-client
+
+# API
+fastapi
+uvicorn[standard]
+# httpx: HTTP client — powers starlette TestClient (scripts/check_api.py)
+httpx
+
+# Config / secrets
+pydantic-settings
+python-dotenv
+
+# PDF parsing (PDFs are text-based — no OCR dependency)
+# pymupdf: primary extractor — correct logical-order Arabic; pdfplumber kept as fallback / table probe
+pymupdf
+pdfplumber
+
+# Word (.docx) parsing
+python-docx
+
+# Language detection (CLAUDE.md §6.2 step 1)
+langdetect
+
+# --- Phase 5 embedding-benchmark candidates (uncomment to compare) ---
+# llama-index-embeddings-cohere
+# llama-index-embeddings-voyageai
+
+# Hybrid (sparse / BM25) search — fastembed "Qdrant/bm25"
+fastembed

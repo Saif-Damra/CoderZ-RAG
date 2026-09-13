@@ -1,0 +1,11 @@
+{
+  "course_id": "powerplatform",
+  "title": "مسار تدريبي شامل — Power Platform (Power BI، Power Apps، Power Automate، Power Pages، Power Virtual Agents)",
+  "category": "Power Platform",
+  "language": "mixed",
+  "target_audience": "الخريجون الجدد من تخصصات تكنولوجيا المعلومات؛ طلاب الجامعات من مختلف التخصصات؛ كل من يرغب في دخول عالم تطوير التطبيقات وأتمتة العمليات؛ الموظفون ومشرفو مختبرات الجامعات وأصحاب الخبرة التقنية؛ من يسعى لزيادة دخله عبر المهارات التقنية؛ الراغبون في تغيير أو تطوير مسارهم المهني للوصول إلى الاحتراف؛ رواد الأعمال الراغبون في بناء حلول تقنية لمشاريعهم",
+  "price": 455,
+  "currency": "JOD",
+  "duration": "190 ساعة تدريبية (نحو 17 أسبوعاً، 3 أيام في الأسبوع، مع جلسة مراجعة اختيارية كل سبت)",
+  "_note": "Sidecar for PowerPlatform.pdf. title / target_audience are hand-verified from the Arabic 'الفئات المستهدفة' page. duration set to 190 hours per reviewer (sum of the six stage headers 30+40+40+40+30+10); the deck's 'الاوقات' page shows a garbled '150' which the reviewer overrode. price 455 JOD is supplied by the reviewer — NOT stated in the PDF. category 'Power Platform' is assumed per reviewer (not stated in the PDF). language 'mixed' matches the best-effort detector."
+}

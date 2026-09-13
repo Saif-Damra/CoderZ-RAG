@@ -1,0 +1,11 @@
+{
+  "course_id": "datahub",
+  "title": "مخيم علم البيانات والذكاء الاصطناعي (DataHub)",
+  "category": "AI",
+  "language": "mixed",
+  "target_audience": "الخريجون الجدد في تخصصات تكنولوجيا المعلومات والمجالات التقنية؛ طلاب الجامعات بمختلف التخصصات الراغبون في دخول عالم البرمجة؛ كل شخص يسعى لدخول سوق برمجة تطبيقات الويب والموبايل وعلوم البيانات؛ موظفو الشركات ومشرفو مختبرات الجامعات الراغبون في تطوير مهاراتهم؛ أي شخص يسعى لزيادة دخله من خلال اكتساب مهارات تقنية مطلوبة؛ الراغبون في تغيير مسارهم المهني أو تطويره؛ رواد الأعمال الذين يطمحون لتأسيس مشاريعهم التقنية",
+  "price": 300,
+  "currency": "JOD",
+  "duration": "160 ساعة تدريبية (14 أسبوعاً، 3 أيام في الأسبوع، 4 ساعات يومياً)",
+  "_note": "Sidecar for DataHub.pdf. price and category are not stated in the PDF (price assumed 300 JOD, category assumed AI per reviewer). title / target_audience / duration are hand-verified from the Arabic pages. Keys not in CLAUDE.md §5 (like this one) are ignored by the parser."
+}

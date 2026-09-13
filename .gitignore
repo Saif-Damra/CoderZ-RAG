@@ -1,0 +1,31 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# Course source PDFs (do not commit customer data)
+data/pdfs/*
+!data/pdfs/.gitkeep
+# ...but DO track the small hand-curated metadata sidecars
+!data/pdfs/*.meta.json
+
+# Generated ingest report
+data/ingest_report.json
+
+# Generated evaluation run results
+eval/runs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Claude Code local (personal) settings
+.claude/settings.local.json
