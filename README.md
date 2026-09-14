@@ -178,18 +178,21 @@ docker compose up -d --build
 
 Qdrant Cloud already holds the ingested courses, so the VPS doesn't need
 `data/pdfs/`. Leave `CORS_ALLOW_ORIGINS=*` for internal testing (the widget is
-served same-origin from the same container anyway).
+served same-origin from the same container anyway). Set `ADMIN_TOKEN` in
+`.env` to a real secret before using `/review` — an empty value keeps it
+locked.
+
+The compose file carries Traefik labels routing `rag.saifdamra.com` to this
+container (HTTPS via the existing Traefik + Let's Encrypt setup on the VPS —
+no port is published directly). If you're deploying this to a different host
+or domain, edit the `labels:` block in `docker-compose.yml` to match, or drop
+it and publish `8000:8000` directly instead.
 
 Your team then uses:
 
-- Widget: `http://YOUR_VPS_IP:8000/widget/widget.html`
-- API docs: `http://YOUR_VPS_IP:8000/docs`
-
-Make sure port 8000 is open in the VPS firewall for your team's IPs — there's
-no authentication on the API, which is fine for internal testing but don't
-leave it open to the wider internet longer than needed. Putting a real domain
-+ HTTPS in front (nginx, Caddy, etc.) is a reasonable next step once this
-moves past internal testing, but isn't required to get the team testing today.
+- Widget: `https://rag.saifdamra.com/widget/widget.html`
+- Feedback review: `https://rag.saifdamra.com/review`
+- API docs: `https://rag.saifdamra.com/docs`
 
 Useful commands on the VPS:
 
