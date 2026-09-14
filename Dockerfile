@@ -16,4 +16,9 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers + --forwarded-allow-ips: this container sits behind a
+# reverse proxy (Traefik) that terminates TLS. Without these, uvicorn builds
+# redirects (e.g. the StaticFiles trailing-slash redirect for /review) using
+# the plain-HTTP scheme it actually receives, sending browsers to http://
+# instead of https://.
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
