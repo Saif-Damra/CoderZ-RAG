@@ -20,7 +20,7 @@ import logging
 import time
 from typing import Literal
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -136,6 +136,25 @@ class FeedbackResponse(BaseModel):
     ok: bool
 
 
+class InteractionOut(BaseModel):
+    id: int
+    created_at: str
+    question: str
+    detected_language: str | None
+    answer: str
+    sources: list[str]
+    used_context: bool
+    response_time_ms: int | None
+    rating: str | None
+    comment: str | None
+    feedback_at: str | None
+
+
+class InteractionsResponse(BaseModel):
+    total: int
+    items: list[InteractionOut]
+
+
 # --------------------------------------------------------------------------- #
 # Error handling — keep internals off the wire
 # --------------------------------------------------------------------------- #
@@ -238,9 +257,38 @@ def feedback(req: FeedbackRequest) -> FeedbackResponse:
     return FeedbackResponse(ok=True)
 
 
+def _require_admin(x_admin_token: str | None) -> None:
+    if not settings.admin_token or x_admin_token != settings.admin_token:
+        raise HTTPException(status_code=401, detail="Invalid or missing admin token")
+
+
+@app.get("/interactions", response_model=InteractionsResponse)
+def interactions(
+    only_feedback: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    x_admin_token: str | None = Header(default=None),
+) -> InteractionsResponse:
+    """Internal endpoint backing the /review page — never exposed to customers."""
+    _require_admin(x_admin_token)
+    try:
+        rows, total = storage.fetch_interactions(
+            only_feedback=only_feedback, limit=limit, offset=offset
+        )
+    except Exception:
+        logger.exception("failed to fetch interactions")
+        return JSONResponse(status_code=502, content={"detail": _FAILED})
+    return InteractionsResponse(total=total, items=[InteractionOut(**r) for r in rows])
+
+
 # Serve the chat widget at /widget (kept off "/" so it doesn't shadow the
 # JSON service banner above). Mounted last so it can't shadow API routes.
 app.mount("/widget", StaticFiles(directory="web", html=True), name="widget")
+
+# Serve the internal feedback-review page at /review. The page itself is
+# static and unprotected, but every /interactions call it makes requires the
+# admin token entered in the browser (see _require_admin above).
+app.mount("/review", StaticFiles(directory="web/admin", html=True), name="review")
 
 
 if __name__ == "__main__":

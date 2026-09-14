@@ -89,6 +89,38 @@ def log_interaction(
         return cur.lastrowid
 
 
+def fetch_interactions(
+    *, only_feedback: bool = False, limit: int = 50, offset: int = 0
+) -> tuple[list[dict], int]:
+    """Return (rows, total_count) for the review UI, newest first."""
+    where = "WHERE rating IS NOT NULL" if only_feedback else ""
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        total = conn.execute(f"SELECT COUNT(*) FROM interactions {where}").fetchone()[0]
+        rows = conn.execute(
+            f"SELECT id, created_at, question, detected_language, answer, sources, "
+            f"used_context, response_time_ms, rating, comment, feedback_at "
+            f"FROM interactions {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "created_at": r["created_at"],
+                "question": r["question"],
+                "detected_language": r["detected_language"],
+                "answer": r["answer"],
+                "sources": json.loads(r["sources"]),
+                "used_context": bool(r["used_context"]),
+                "response_time_ms": r["response_time_ms"],
+                "rating": r["rating"],
+                "comment": r["comment"],
+                "feedback_at": r["feedback_at"],
+            }
+            for r in rows
+        ], total
+
+
 def record_feedback(interaction_id: int, rating: str, comment: str | None) -> bool:
     """Attach a rating/comment to an existing interaction. False if id unknown."""
     with _connect() as conn:

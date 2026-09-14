@@ -82,6 +82,14 @@ class Settings(BaseSettings):
         default="data/feedback.db",
         description="Path to the SQLite DB storing interaction logs + feedback.",
     )
+    admin_token: str = Field(
+        default="",
+        description=(
+            "Shared secret required (as the X-Admin-Token header) to read "
+            "GET /interactions and load the /review page. Empty disables the "
+            "endpoint entirely — set this before deploying."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # Embeddings — swap provider via EMBEDDING_PROVIDER.
@@ -150,6 +158,7 @@ if __name__ == "__main__":
     print(f"llm_request_timeout : {settings.llm_request_timeout}")
     print(f"cors_allow_origins  : {settings.cors_allow_origins}")
     print(f"feedback_db_path    : {settings.feedback_db_path}")
+    print(f"admin_token         : {_mask(settings.admin_token)}")
     print(f"embedding_provider  : {settings.embedding_provider}")
     print(f"embedding_model     : {settings.embedding_model}")
     print(f"embedding_dim       : {settings.embedding_dim}")

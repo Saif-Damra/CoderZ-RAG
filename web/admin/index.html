@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedback review</title>
+
+<!--
+  Internal team page: browse logged /chat interactions + thumbs up/down
+  feedback (api/storage.py). Talks to GET /interactions, which requires the
+  X-Admin-Token header (config.py ADMIN_TOKEN). Not linked from anywhere
+  customer-facing; the token gate is the only thing standing between this
+  page and the raw interaction log, so don't disable it in production.
+-->
+
+<style>
+  :root {
+    --bg: #f7f8fa; --panel: #ffffff; --border: #e3e6ea; --text: #1b1f24;
+    --muted: #6b7280; --accent: #1f6feb; --up: #1a7f37; --down: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --panel: #1c1f24; --border: #30343b; --text: #e7e9ec;
+      --muted: #9aa3af; --up: #4ade80; --down: #ff9c8f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding-block: 24px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding-inline: 20px; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+
+  .gate {
+    max-width: 360px; margin: 80px auto; padding: 24px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px;
+  }
+  .gate p { margin: 0 0 12px; color: var(--muted); }
+  .gate input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font: inherit; color: var(--text); background: var(--bg); margin-bottom: 10px;
+  }
+  .gate button, .toolbar button, .pager button {
+    padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; font: inherit; cursor: pointer;
+  }
+  .gate button:disabled, .pager button:disabled { opacity: .5; cursor: default; }
+  .gate .err { color: var(--down); min-height: 18px; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .toolbar label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .toolbar .spacer { flex: 1 1 auto; }
+  .toolbar button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .count { color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+          border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  thead th {
+    text-align: start; font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .q, .a, .c { max-width: 320px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .a { color: var(--muted); }
+  .meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .rating { font-size: 16px; }
+  .rating.up { color: var(--up); }
+  .rating.down { color: var(--down); }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+  .pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+  .pager button { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <section class="gate" id="gate">
+    <h1>Feedback review</h1>
+    <p>Enter the admin token to load logged interactions.</p>
+    <input type="password" id="tokenInput" placeholder="Admin token" autocomplete="off">
+    <button id="gateBtn" type="button">Unlock</button>
+    <div class="err" id="gateErr"></div>
+  </section>
+
+  <section id="main" hidden>
+    <h1>Feedback review</h1>
+    <div class="toolbar">
+      <label><input type="checkbox" id="onlyFeedback"> Only rated</label>
+      <span class="count" id="count"></span>
+      <span class="spacer"></span>
+      <button class="secondary" id="refreshBtn" type="button">Refresh</button>
+      <button class="secondary" id="lockBtn" type="button">Lock</button>
+    </div>
+
+    <table id="table" hidden>
+      <thead>
+        <tr>
+          <th>When</th><th>Question</th><th>Answer</th><th>Rating</th><th>Comment</th><th>Meta</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No interactions found.</div>
+
+    <div class="pager">
+      <button id="prevBtn" type="button">&larr; Prev</button>
+      <span id="pageInfo" class="count"></span>
+      <button id="nextBtn" type="button">Next &rarr;</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var API_BASE = location.origin.replace(/\/+$/, "");
+  var PAGE_SIZE = 50;
+  var TOKEN_KEY = "cz_admin_token";
+
+  var gate = document.getElementById("gate");
+  var main = document.getElementById("main");
+  var tokenInput = document.getElementById("tokenInput");
+  var gateBtn = document.getElementById("gateBtn");
+  var gateErr = document.getElementById("gateErr");
+  var onlyFeedback = document.getElementById("onlyFeedback");
+  var countEl = document.getElementById("count");
+  var table = document.getElementById("table");
+  var rowsEl = document.getElementById("rows");
+  var emptyEl = document.getElementById("empty");
+  var prevBtn = document.getElementById("prevBtn");
+  var nextBtn = document.getElementById("nextBtn");
+  var pageInfo = document.getElementById("pageInfo");
+  var refreshBtn = document.getElementById("refreshBtn");
+  var lockBtn = document.getElementById("lockBtn");
+
+  var token = "";
+  var offset = 0;
+
+  function fmtDate(iso) {
+    try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+  }
+
+  function render(data) {
+    rowsEl.innerHTML = "";
+    var items = data.items || [];
+    table.hidden = items.length === 0;
+    emptyEl.hidden = items.length !== 0;
+    countEl.textContent = data.total + " total";
+
+    items.forEach(function (r) {
+      var tr = document.createElement("tr");
+
+      var ratingHtml = "-";
+      if (r.rating === "up") ratingHtml = '<span class="rating up">&#128077;</span>';
+      else if (r.rating === "down") ratingHtml = '<span class="rating down">&#128078;</span>';
+
+      var metaBits = [];
+      if (r.detected_language) metaBits.push(r.detected_language.toUpperCase());
+      metaBits.push(r.used_context ? "ctx" : "no-ctx");
+      if (r.response_time_ms != null) metaBits.push(r.response_time_ms + "ms");
+
+      tr.innerHTML =
+        '<td class="meta">' + fmtDate(r.created_at) + "</td>" +
+        '<td class="q"></td>' +
+        '<td class="a"></td>' +
+        '<td>' + ratingHtml + "</td>" +
+        '<td class="c"></td>' +
+        '<td class="meta">' + metaBits.join(" · ") + "</td>";
+
+      tr.querySelector(".q").textContent = r.question;
+      tr.querySelector(".a").textContent = r.answer;
+      tr.querySelector(".c").textContent = r.comment || "";
+
+      rowsEl.appendChild(tr);
+    });
+
+    prevBtn.disabled = offset === 0;
+    nextBtn.disabled = offset + items.length >= data.total;
+    var page = Math.floor(offset / PAGE_SIZE) + 1;
+    var pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+    pageInfo.textContent = "Page " + page + " / " + pages;
+  }
+
+  function load() {
+    var url = API_BASE + "/interactions?limit=" + PAGE_SIZE + "&offset=" + offset +
+      "&only_feedback=" + (onlyFeedback.checked ? "true" : "false");
+    return fetch(url, { headers: { "X-Admin-Token": token } }).then(function (res) {
+      if (res.status === 401) throw new Error("unauthorized");
+      if (!res.ok) throw new Error("request failed");
+      return res.json();
+    });
+  }
+
+  function refresh() {
+    load().then(render).catch(function (err) {
+      if (err.message === "unauthorized") {
+        showGate("That token was rejected.");
+      } else {
+        emptyEl.hidden = false;
+        emptyEl.textContent = "Failed to load interactions. Please retry.";
+        table.hidden = true;
+      }
+    });
+  }
+
+  function showGate(err) {
+    main.hidden = true;
+    gate.hidden = false;
+    gateErr.textContent = err || "";
+    try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    token = "";
+    tokenInput.focus();
+  }
+
+  function unlock() {
+    var v = tokenInput.value.trim();
+    if (!v) return;
+    token = v;
+    gateErr.textContent = "";
+    gate.hidden = true;
+    main.hidden = false;
+    offset = 0;
+    try { sessionStorage.setItem(TOKEN_KEY, v); } catch (e) {}
+    refresh();
+  }
+
+  gateBtn.addEventListener("click", unlock);
+  tokenInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") unlock();
+  });
+  lockBtn.addEventListener("click", function () { showGate(); });
+  refreshBtn.addEventListener("click", refresh);
+  onlyFeedback.addEventListener("change", function () { offset = 0; refresh(); });
+  prevBtn.addEventListener("click", function () {
+    offset = Math.max(0, offset - PAGE_SIZE);
+    refresh();
+  });
+  nextBtn.addEventListener("click", function () {
+    offset = offset + PAGE_SIZE;
+    refresh();
+  });
+
+  // Reuse the token for the tab's session so a refresh doesn't re-prompt.
+  try {
+    var saved = sessionStorage.getItem(TOKEN_KEY);
+    if (saved) {
+      token = saved;
+      gate.hidden = true;
+      main.hidden = false;
+      refresh();
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
